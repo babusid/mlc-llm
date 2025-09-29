@@ -1,15 +1,16 @@
 import torch
 import os
 import argparse
-from transformers import AutoModelForCausalLM, AutoTokenizer, Phi3ForCausalLM
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from mlc_llm.support.style import green, red
-from .models.phi_4_mini_instruct.modeling_phi3 import Phi3ForCausalLM 
+from models.phi_4_mini_instruct.modeling_phi3 import Phi3ForCausalLM
 
 # TOKENIZERS_PARALLELISM="false"
 # os.environ["TOKENIZERS_PARALLELISM"] = TOKENIZERS_PARALLELISM
 parser = argparse.ArgumentParser(
     description="Load a tokenizer from a local model directory and tokenize a sample input."
 )
+
 parser.add_argument(
     "--model_path",
     type=str,
@@ -46,7 +47,7 @@ tokenizer: AutoTokenizer = AutoTokenizer.from_pretrained(
 # Instantiate the LLM
 model = Phi3ForCausalLM.from_pretrained(
     model_path,
-    dtype=torch.float32,
+    # dtype=torch.float32,
     attn_implementation="sdpa",
     local_files_only=True,  # Only use local files, don't try to download
     trust_remote_code=False,
