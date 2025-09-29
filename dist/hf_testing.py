@@ -1,8 +1,9 @@
 import torch
 import os
 import argparse
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, Phi3ForCausalLM
 from mlc_llm.support.style import green, red
+from .models.phi_4_mini_instruct.modeling_phi3 import Phi3ForCausalLM 
 
 # TOKENIZERS_PARALLELISM="false"
 # os.environ["TOKENIZERS_PARALLELISM"] = TOKENIZERS_PARALLELISM
@@ -13,7 +14,7 @@ parser.add_argument(
     "--model_path",
     type=str,
     required=False,
-    default="/Users/sidhartb/Work/mlc-llm/dist/models/Phi-4-mini-instruct",
+    default="/Users/sidhartb/Work/mlc-llm/dist/models/phi_4_mini_instruct",
     help="Path to the local model directory",
 )
 parser.add_argument(
@@ -43,7 +44,7 @@ tokenizer: AutoTokenizer = AutoTokenizer.from_pretrained(
     trust_remote_code=False,
 )
 # Instantiate the LLM
-model = AutoModelForCausalLM.from_pretrained(
+model = Phi3ForCausalLM.from_pretrained(
     model_path,
     dtype=torch.float32,
     attn_implementation="sdpa",
@@ -57,7 +58,11 @@ print(f"{green('Tokenizer loaded successfully.\n')} Tokenizing input: \n{args.in
 inputs = tokenizer(args.input_text, return_tensors="pt")
 print(f"{red('Tokenized inputs:')} {inputs}")
 
+# Run only the prefill stage (forward pass without generation)
+with torch.no_grad():
+    outputs = model(**inputs)
 
-outputs = model.generate(**inputs, max_new_tokens=20)
-print(f"{red('Raw Model outputs:')} {outputs}")
-print(f"{red('Decoded output:')} {tokenizer.decode(outputs[0], skip_special_tokens=True)}")
+print(f"{red('Prefill outputs (logits shape):')} {outputs.logits.shape}")
+print(
+    f"{red('Last token logits:')} {outputs.logits[0, -1, :5]}..."
+)  # Show first 5 logits of last token
