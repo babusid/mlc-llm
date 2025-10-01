@@ -41,6 +41,7 @@ from transformers.utils import (
     logging,
     replace_return_docstrings,
 )
+
 try:
     from transformers.utils import LossKwargs
 except ImportError:
@@ -56,8 +57,9 @@ _CHECKPOINT_FOR_DOC = "microsoft/Phi-3-mini-4k-instruct"
 _CONFIG_FOR_DOC = "Phi3Config"
 
 # Global variable to order the tensor dumps for debugging.
-# Each tensor dump should increment this counter by 1. 
-tensor_dump_counter = 0
+# Each tensor dump should increment this counter by 1.
+TENSOR_DUMP_COUNTER = 0
+
 
 class Phi3MLP(nn.Module):
     def __init__(self, config):
@@ -74,7 +76,16 @@ class Phi3MLP(nn.Module):
         gate, up_states = up_states.chunk(2, dim=-1)
         up_states = up_states * self.activation_fn(gate)
 
-        return self.down_proj(up_states)
+        retval = self.down_proj(up_states)
+        global TENSOR_DUMP_COUNTER
+        # print("Dumping MLP tensors for debugging...")
+        np.savez(
+            f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_MLP.npz",
+            arg_0=hidden_states.detach().cpu().numpy(),
+            arg_1=retval.detach().cpu().numpy(),
+        )
+        TENSOR_DUMP_COUNTER += 1
+        return retval
 
 
 def rotate_half(x):
@@ -226,6 +237,19 @@ class Phi3Attention(nn.Module):
 
         attn_output = attn_output.reshape(*input_shape, -1).contiguous()
         attn_output = self.o_proj(attn_output)
+
+        global TENSOR_DUMP_COUNTER
+        # print("Dumping Attention tensors for debugging...")
+        np.savez(
+            f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_Attention.npz",
+            arg_0=hidden_states.detach().cpu().numpy(), # (batch, seq_len, hidden)
+            arg_1=position_embeddings[0].detach().cpu().numpy(), # (cos)
+            arg_2=position_embeddings[1].detach().cpu().numpy(), # (sin)
+            arg_3=attn_output.detach().cpu().numpy(),
+            arg_4=attn_weights.detach().cpu().numpy() if attn_weights is not None else None,
+        )
+        TENSOR_DUMP_COUNTER += 1
+
         return attn_output, attn_weights
 
 
@@ -243,7 +267,17 @@ class Phi3RMSNorm(nn.Module):
         hidden_states = hidden_states.to(torch.float32)
         variance = hidden_states.pow(2).mean(-1, keepdim=True)
         hidden_states = hidden_states * torch.rsqrt(variance + self.variance_epsilon)
-        return self.weight * hidden_states.to(input_dtype)
+
+        retval = self.weight * hidden_states.to(input_dtype)
+        global TENSOR_DUMP_COUNTER
+        # print("Dumping RMSNorm tensors for debugging...")
+        np.savez(
+            f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_RMSNorm.npz",
+            arg_0=hidden_states.detach().cpu().numpy(),
+            arg_1=retval.detach().cpu().numpy(),
+        )
+        TENSOR_DUMP_COUNTER += 1
+        return retval
 
     def extra_repr(self):
         return f"{tuple(self.weight.shape)}, eps={self.variance_epsilon}"
@@ -295,11 +329,14 @@ class Phi3DecoderLayer(nn.Module):
                 Arbitrary kwargs to be ignored, used for FSDP and other methods that injects code
                 into the model
         """
+        global TENSOR_DUMP_COUNTER
         residual = hidden_states
-
+        original = hidden_states.clone()
+        # Tensor dump handled by Phi3RMSNorm fwd func
         hidden_states = self.input_layernorm(hidden_states)
 
         # Self Attention
+        # Tensor dump handled by Phi3Attention fwd func
         hidden_states, self_attn_weights = self.self_attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
@@ -311,17 +348,52 @@ class Phi3DecoderLayer(nn.Module):
             position_embeddings=position_embeddings,
             **kwargs,
         )
-        hidden_states = residual + self.resid_attn_dropout(hidden_states)  # main diff with Llama
+        hidden_states = residual + self.resid_attn_dropout(
+            hidden_states
+        )  # main diff with Llama
+        # print("Dumping DecoderLayer Attention output tensors for debugging...")
+        np.savez(
+            f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_DecoderLayer_ResidAttnDropout.npz",
+            arg_0=residual.detach().cpu().numpy(),
+            arg_1=hidden_states.detach().cpu().numpy(),
+        )
+        TENSOR_DUMP_COUNTER += 1
+
 
         residual = hidden_states
+
+        # Tensor dump handled by Phi3RMSNorm fwd func
         hidden_states = self.post_attention_layernorm(hidden_states)
+        # Tensor dump handled by Phi3MLP fwd func
         hidden_states = self.mlp(hidden_states)
-        hidden_states = residual + self.resid_mlp_dropout(hidden_states)  # main diff with Llama
+        hidden_states = residual + self.resid_mlp_dropout(
+            hidden_states
+        )  # main diff with Llama
+
+        # print("Dumping DecoderLayer MLP output tensors for debugging...")
+        np.savez(
+            f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_DecoderLayer_ResidMLPDropout.npz",
+            arg_0=residual.detach().cpu().numpy(),
+            arg_1=hidden_states.detach().cpu().numpy(),
+        ) 
+        TENSOR_DUMP_COUNTER += 1
 
         outputs = (hidden_states,)
         if output_attentions:
             outputs += (self_attn_weights,)
-
+            np.savez(
+                f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_DecoderLayer.npz",
+                arg_0=original.detach().cpu().numpy(),
+                arg_1=outputs[0].detach().cpu().numpy(),
+                arg_2=outputs[1].detach().cpu().numpy()
+            )
+        else:
+            np.savez(
+                f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_DecoderLayer.npz",
+                arg_0=original.detach().cpu().numpy(),
+                arg_1=outputs[0].detach().cpu().numpy(),
+            )
+        TENSOR_DUMP_COUNTER += 1
         return outputs
 
 
@@ -384,16 +456,23 @@ class Phi3RotaryEmbedding(nn.Module):
         # Advanced RoPE types (e.g. yarn) apply a post-processing scaling factor, equivalent to scaling attention
         cos = cos * self.attention_scaling
         sin = sin * self.attention_scaling
+        
         cos = cos.to(dtype=x.dtype)
         sin = sin.to(dtype=x.dtype)
 
         # save inputs, cos, sin as npz file for debugging
         print("Dumping RoPE tensors for debugging...")
-        global tensor_dump_counter
-        np.savez(f"debug/debug-Phi-4-mini-instruct-hf/f{tensor_dump_counter}_tensor_dump_RoPe.npz", arg0=x, arg1=cos, arg2=sin)
-        tensor_dump_counter += 1
+        global TENSOR_DUMP_COUNTER
+        np.savez(
+            f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_RoPe.npz",
+            arg0=x,
+            arg1=position_ids,
+            arg2=cos,
+            arg3=sin,
+        )
+        TENSOR_DUMP_COUNTER += 1
 
-        return cos.to(dtype=x.dtype), sin.to(dtype=x.dtype)
+        return cos, sin
 
     def _longrope_frequency_update(self, position_ids, device):
         """Longrope uses long factor if sequence is larger than original pretraining length, short otherwise."""
@@ -605,6 +684,16 @@ class Phi3Model(Phi3PreTrainedModel):
 
         if inputs_embeds is None:
             inputs_embeds = self.embed_tokens(input_ids)
+            global TENSOR_DUMP_COUNTER
+            print(
+                "No input embeddings, creating and dumping input_embeds for debugging..."
+            )
+            np.savez(
+                f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_input_embeds.npz",
+                arg0=input_ids,
+                arg1=inputs_embeds,
+            )
+            TENSOR_DUMP_COUNTER += 1
 
         if use_cache and past_key_values is None:
             past_key_values = DynamicCache()
