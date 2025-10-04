@@ -3,7 +3,7 @@ import os
 import argparse
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from mlc_llm.support.style import green, red
-from models.phi_4_mini_instruct.modeling_phi3 import Phi3ForCausalLM
+from .modeling_phi3 import Phi3ForCausalLM
 
 # TOKENIZERS_PARALLELISM="false"
 # os.environ["TOKENIZERS_PARALLELISM"] = TOKENIZERS_PARALLELISM
