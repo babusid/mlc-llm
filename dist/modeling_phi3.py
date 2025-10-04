@@ -71,14 +71,14 @@ class Phi3MLP(nn.Module):
         self.activation_fn = ACT2FN[config.hidden_act]
 
     def forward(self, hidden_states: torch.FloatTensor) -> torch.FloatTensor:
+        global TENSOR_DUMP_COUNTER
         up_states = self.gate_up_proj(hidden_states)
 
         gate, up_states = up_states.chunk(2, dim=-1)
         up_states = up_states * self.activation_fn(gate)
 
         retval = self.down_proj(up_states)
-        global TENSOR_DUMP_COUNTER
-        # print("Dumping MLP tensors for debugging...")
+        # # print("Dumping MLP tensors for debugging...")
         np.savez(
             f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_MLP.npz",
             arg_0=hidden_states.detach().cpu().numpy(),
@@ -92,7 +92,14 @@ def rotate_half(x):
     """Rotates half the hidden dims of the input."""
     x1 = x[..., : x.shape[-1] // 2]
     x2 = x[..., x.shape[-1] // 2 :]
-    return torch.cat((-x2, x1), dim=-1)
+    retval = torch.cat((-x2, x1), dim=-1)
+    # global TENSOR_DUMP_COUNTER
+    # np.savez(f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_rotate_half.npz",
+    #     arg_0=x.detach().cpu().numpy(),
+    #     arg_1=retval.detach().cpu().numpy(),
+    # )
+    # TENSOR_DUMP_COUNTER += 1
+    return retval
 
 
 def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
@@ -100,11 +107,26 @@ def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
     This is the equivalent of torch.repeat_interleave(x, dim=1, repeats=n_rep). The hidden states go from (batch,
     num_key_value_heads, seqlen, head_dim) to (batch, num_attention_heads, seqlen, head_dim)
     """
+    global TENSOR_DUMP_COUNTER
     batch, num_key_value_heads, slen, head_dim = hidden_states.shape
     if n_rep == 1:
+        # np.savez(f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_repeat_kv.npz",
+        #     arg_0=hidden_states.detach().cpu().numpy(),
+        #     arg_1=n_rep,
+        #     arg_2=hidden_states.detach().cpu().numpy(),
+        # )
+        # TENSOR_DUMP_COUNTER += 1
         return hidden_states
     hidden_states = hidden_states[:, :, None, :, :].expand(batch, num_key_value_heads, n_rep, slen, head_dim)
-    return hidden_states.reshape(batch, num_key_value_heads * n_rep, slen, head_dim)
+    retval = hidden_states.reshape(batch, num_key_value_heads * n_rep, slen, head_dim)
+
+    # np.savez(f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_repeat_kv.npz",
+    #     arg_0=hidden_states.detach().cpu().numpy(),
+    #     arg_1=n_rep,
+    #     arg_2=retval.detach().cpu().numpy(),
+    # )
+    # TENSOR_DUMP_COUNTER += 1
+    return retval
 
 
 def eager_attention_forward(
@@ -130,6 +152,16 @@ def eager_attention_forward(
     attn_output = torch.matmul(attn_weights, value_states)
     attn_output = attn_output.transpose(1, 2).contiguous()
 
+    global TENSOR_DUMP_COUNTER
+    # np.savez(f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_eager_attention_forward.npz",
+    #     arg_0=query.detach().cpu().numpy(),
+    #     arg_1=key.detach().cpu().numpy(),
+    #     arg_2=value.detach().cpu().numpy(),
+    #     arg_3=attn_weights.detach().cpu().numpy(),
+    #     arg_4=attn_output.detach().cpu().numpy(),
+    # )
+    # TENSOR_DUMP_COUNTER += 1
+
     return attn_output, attn_weights
 
 
@@ -153,6 +185,7 @@ def apply_rotary_pos_emb(q, k, cos, sin, position_ids=None, unsqueeze_dim=1):
     Returns:
         `tuple(torch.Tensor)` comprising of the query and key tensors rotated using the Rotary Position Embedding.
     """
+    global TENSOR_DUMP_COUNTER
     cos = cos.unsqueeze(unsqueeze_dim)
     sin = sin.unsqueeze(unsqueeze_dim)
 
@@ -162,6 +195,19 @@ def apply_rotary_pos_emb(q, k, cos, sin, position_ids=None, unsqueeze_dim=1):
 
     q_embed = torch.cat([(q_rot * cos) + (rotate_half(q_rot) * sin), q_pass], dim=-1)
     k_embed = torch.cat([(k_rot * cos) + (rotate_half(k_rot) * sin), k_pass], dim=-1)
+
+    # np.savez(
+    #     f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_apply_rotary_pos_emb.npz",
+    #     arg_0=q.detach().cpu().numpy(),
+    #     arg_1=k.detach().cpu().numpy(),
+    #     arg_2=cos.detach().cpu().numpy(),
+    #     arg_3=sin.detach().cpu().numpy(),
+    #     arg_4=q_embed.detach().cpu().numpy(),
+    #     arg_5=k_embed.detach().cpu().numpy(),
+    # )
+    # TENSOR_DUMP_COUNTER += 1
+
+
     return q_embed, k_embed
 
 
@@ -192,10 +238,20 @@ class Phi3Attention(nn.Module):
         cache_position: Optional[torch.LongTensor] = None,
         **kwargs: Unpack[FlashAttentionKwargs],
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
+        global TENSOR_DUMP_COUNTER
         input_shape = hidden_states.shape[:-1]
         hidden_shape = (*input_shape, -1, self.head_dim)
 
         qkv = self.qkv_proj(hidden_states)
+        np.savez(
+            f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_qkv_proj.npz",
+            arg_0=hidden_states.detach().cpu().numpy(), # (batch, seq_len, hidden)
+            arg_1=qkv.detach().cpu().numpy(), # (batch, seq_len, qkv)
+        )
+        TENSOR_DUMP_COUNTER += 1
+
+
+
         query_pos = self.config.num_attention_heads * self.head_dim
         query_states = qkv[..., :query_pos]
         key_states = qkv[..., query_pos : query_pos + self.num_key_value_heads * self.head_dim]
@@ -235,19 +291,46 @@ class Phi3Attention(nn.Module):
             **kwargs,
         )
 
+        if attn_weights is not None:
+            np.savez(
+                f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_Attention_before_o_proj.npz",
+                arg_0=hidden_states.detach().cpu().numpy(), # (batch, seq_len, hidden)
+                arg_1=position_embeddings[0].detach().cpu().numpy(), # (cos)
+                arg_2=position_embeddings[1].detach().cpu().numpy(), # (sin)
+                arg_3=attn_output.detach().cpu().numpy(),
+                arg_4=attn_weights.detach().cpu().numpy(),
+            )
+        else:
+            np.savez(
+                f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_Attention_before_o_proj.npz",
+                arg_0=hidden_states.detach().cpu().numpy(), # (batch, seq_len, hidden)
+                arg_1=position_embeddings[0].detach().cpu().numpy(), # (cos)
+                arg_2=position_embeddings[1].detach().cpu().numpy(), # (sin)
+                arg_3=attn_output.detach().cpu().numpy(),
+            )
+        TENSOR_DUMP_COUNTER += 1
+        
         attn_output = attn_output.reshape(*input_shape, -1).contiguous()
         attn_output = self.o_proj(attn_output)
 
-        global TENSOR_DUMP_COUNTER
         # print("Dumping Attention tensors for debugging...")
-        np.savez(
-            f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_Attention.npz",
-            arg_0=hidden_states.detach().cpu().numpy(), # (batch, seq_len, hidden)
-            arg_1=position_embeddings[0].detach().cpu().numpy(), # (cos)
-            arg_2=position_embeddings[1].detach().cpu().numpy(), # (sin)
-            arg_3=attn_output.detach().cpu().numpy(),
-            arg_4=attn_weights.detach().cpu().numpy() if attn_weights is not None else None,
-        )
+        if attn_weights is not None:
+            np.savez(
+                f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_Attention.npz",
+                arg_0=hidden_states.detach().cpu().numpy(), # (batch, seq_len, hidden)
+                arg_1=position_embeddings[0].detach().cpu().numpy(), # (cos)
+                arg_2=position_embeddings[1].detach().cpu().numpy(), # (sin)
+                arg_3=attn_output.detach().cpu().numpy(),
+                arg_4=attn_weights.detach().cpu().numpy(),
+            )
+        else:
+            np.savez(
+                f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_Attention.npz",
+                arg_0=hidden_states.detach().cpu().numpy(), # (batch, seq_len, hidden)
+                arg_1=position_embeddings[0].detach().cpu().numpy(), # (cos)
+                arg_2=position_embeddings[1].detach().cpu().numpy(), # (sin)
+                arg_3=attn_output.detach().cpu().numpy(),
+            )
         TENSOR_DUMP_COUNTER += 1
 
         return attn_output, attn_weights
@@ -352,12 +435,12 @@ class Phi3DecoderLayer(nn.Module):
             hidden_states
         )  # main diff with Llama
         # print("Dumping DecoderLayer Attention output tensors for debugging...")
-        np.savez(
-            f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_DecoderLayer_ResidAttnDropout.npz",
-            arg_0=residual.detach().cpu().numpy(),
-            arg_1=hidden_states.detach().cpu().numpy(),
-        )
-        TENSOR_DUMP_COUNTER += 1
+        # np.savez(
+        #     f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_DecoderLayer_ResidAttnDropout.npz",
+        #     arg_0=residual.detach().cpu().numpy(),
+        #     arg_1=hidden_states.detach().cpu().numpy(),
+        # )
+        # TENSOR_DUMP_COUNTER += 1
 
 
         residual = hidden_states
@@ -371,12 +454,12 @@ class Phi3DecoderLayer(nn.Module):
         )  # main diff with Llama
 
         # print("Dumping DecoderLayer MLP output tensors for debugging...")
-        np.savez(
-            f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_DecoderLayer_ResidMLPDropout.npz",
-            arg_0=residual.detach().cpu().numpy(),
-            arg_1=hidden_states.detach().cpu().numpy(),
-        ) 
-        TENSOR_DUMP_COUNTER += 1
+        # np.savez(
+        #     f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_DecoderLayer_ResidMLPDropout.npz",
+        #     arg_0=residual.detach().cpu().numpy(),
+        #     arg_1=hidden_states.detach().cpu().numpy(),
+        # ) 
+        # TENSOR_DUMP_COUNTER += 1
 
         outputs = (hidden_states,)
         if output_attentions:
@@ -461,10 +544,9 @@ class Phi3RotaryEmbedding(nn.Module):
         sin = sin.to(dtype=x.dtype)
 
         # save inputs, cos, sin as npz file for debugging
-        print("Dumping RoPE tensors for debugging...")
         global TENSOR_DUMP_COUNTER
         np.savez(
-            f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_RoPe.npz",
+            f"debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_phi3_rotary_embedding.npz",
             arg0=x,
             arg1=position_ids,
             arg2=cos,
