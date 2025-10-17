@@ -25,7 +25,7 @@ if __name__ == "__main__":
     print(f"Num datapoints: {f1.shape}")
 
     # assertion thresholds to progressively tighten
-    thresholds = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6]
+    thresholds = [1e-3, 1e-4, 1e-5, 1e-6]
 
     for threshold in thresholds:
         try:

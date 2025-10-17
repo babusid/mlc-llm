@@ -3,7 +3,7 @@ import os
 import argparse
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from mlc_llm.support.style import green, red
-from .modeling_phi3 import Phi3ForCausalLM
+from modeling_phi3 import Phi3ForCausalLM
 
 # TOKENIZERS_PARALLELISM="false"
 # os.environ["TOKENIZERS_PARALLELISM"] = TOKENIZERS_PARALLELISM
@@ -58,6 +58,7 @@ print(f"Model attention implementation: {model.config._attn_implementation}")
 print(f"{green('Tokenizer loaded successfully.\n')} Tokenizing input: \n{args.input_text}")
 inputs = tokenizer(args.input_text, return_tensors="pt")
 print(f"{red('Tokenized inputs:')} {inputs}")
+print(f"{red('Input IDs Tensor shape:')} {inputs['input_ids'].shape}")
 
 # Run only the prefill stage (forward pass without generation)
 with torch.no_grad():
