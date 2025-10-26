@@ -2,7 +2,6 @@ import torch
 import os
 import argparse
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from mlc_llm.support.style import green, red
 from modeling_phi3 import Phi3ForCausalLM
 
 # TOKENIZERS_PARALLELISM="false"
@@ -52,6 +51,14 @@ model = Phi3ForCausalLM.from_pretrained(
     local_files_only=True,  # Only use local files, don't try to download
     trust_remote_code=False,
 )
+
+def red(text: str) -> str:
+    return f"\033[91m{text}\033[0m"
+
+def green(text: str) -> str:
+    return f"\033[92m{text}\033[0m"
+
+
 
 print(f"{green('Model loaded successfully.')}")
 print(f"Model attention implementation: {model.config._attn_implementation}")

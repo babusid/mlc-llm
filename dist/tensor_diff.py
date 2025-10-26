@@ -17,8 +17,9 @@ if __name__ == "__main__":
     f2 = np.load(args.file2)
     f2 = f2[f2.files[-1]]
 
-    f1 = f1.flatten()
-    f2 = f2.flatten()
+    # add batch dim of 1 to f2
+    if f1.ndim == f2.ndim + 1:
+        f2 = np.expand_dims(f2, axis=0)
 
     assert f1.shape == f2.shape, f"Shape mismatch, tensors not comparable: {f1.shape} vs {f2.shape}"
 
