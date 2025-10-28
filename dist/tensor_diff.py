@@ -6,20 +6,31 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Ingest two NPZ files, check the last tensor in each for differences, and progressively tighten assertions."
     )
-    parser.add_argument("file1", type=str, help="Path to first input NPZ file.")
-    parser.add_argument("file2", type=str, help="Path to second input NPZ file.")
+    parser.add_argument(
+        "--file1", 
+        type=str,
+        required=False,
+        help="Path to first input NPZ file.",
+        default="/Users/sidhartb/Work/mlc-llm/dist/debug/debug-Phi-4-mini-instruct-hf/f4_tensor_dump_attn_inputs.npz")
+    parser.add_argument(
+        "--file2", 
+        type=str,
+        required=False,
+        help="Path to second input NPZ file.",
+        default="/Users/sidhartb/Work/mlc-llm/dist/debug/debug-chat-intermediates/0_tensor_dump_q_split_rotary.npz"
+    )
 
     args = parser.parse_args()
 
-    f1 = np.load(args.file1)
-    f1 = f1[f1.files[-1]]
+    _f1 = np.load(args.file1)
+    f1 = _f1[_f1.files[0]]
 
-    f2 = np.load(args.file2)
-    f2 = f2[f2.files[-1]]
-
-    # add batch dim of 1 to f2
-    if f1.ndim == f2.ndim + 1:
-        f2 = np.expand_dims(f2, axis=0)
+    _f2 = np.load(args.file2)
+    f2 = _f2[_f2.files[0]]
+    # # add batch dim of 1 to f2
+    # if f1.ndim == f2.ndim + 1:
+    #     f2 = np.expand_dims(f2, axis=0)
+    
 
     assert f1.shape == f2.shape, f"Shape mismatch, tensors not comparable: {f1.shape} vs {f2.shape}"
 
