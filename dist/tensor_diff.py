@@ -11,19 +11,19 @@ if __name__ == "__main__":
         type=str,
         required=False,
         help="Path to first input NPZ file.",
-        default="/Users/sidhartb/Work/mlc-llm/dist/debug/debug-Phi-4-mini-instruct-hf/f4_tensor_dump_attn_inputs.npz")
+        default="/Users/sidhartb/Work/mlc-llm/dist/debug/debug-Phi-4-mini-instruct-hf/f1_tensor_dump_phi3_rotary_embedding.npz")
     parser.add_argument(
         "--file2", 
         type=str,
         required=False,
         help="Path to second input NPZ file.",
-        default="/Users/sidhartb/Work/mlc-llm/dist/debug/debug-chat-intermediates/0_tensor_dump_q_split_rotary.npz"
+        default="/Users/sidhartb/Work/mlc-llm/dist/debug/debug-tvm-rope-scaling-factors/tvm_rope_freq_longrope.npz"
     )
 
     args = parser.parse_args()
 
     _f1 = np.load(args.file1)
-    f1 = _f1[_f1.files[0]]
+    f1 = _f1[_f1.files[2]]
 
     _f2 = np.load(args.file2)
     f2 = _f2[_f2.files[0]]

@@ -262,7 +262,21 @@ class Phi3Attention(nn.Module):
         value_states = value_states.view(hidden_shape).transpose(1, 2)
 
         cos, sin = position_embeddings
+        np.savez(
+            f"/Users/sidhartb/Work/mlc-llm/dist/debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_q_k_before_rotary_emb.npz",
+            cos=cos.detach().cpu().numpy(),
+            sin=sin.detach().cpu().numpy(),
+            query=query_states.detach().cpu().numpy(),
+            key=key_states.detach().cpu().numpy(),
+        )
+        TENSOR_DUMP_COUNTER += 1
         query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
+        np.savez(
+            f"/Users/sidhartb/Work/mlc-llm/dist/debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_q_k_after_rotary_emb.npz",
+            query=query_states.detach().cpu().numpy(),
+            key=key_states.detach().cpu().numpy(),
+        )
+        TENSOR_DUMP_COUNTER += 1
 
         if past_key_value is not None:
             # sin and cos are specific to RoPE models; cache_position needed for the static cache
@@ -503,6 +517,7 @@ class Phi3RotaryEmbedding(nn.Module):
         self.rope_init_fn = ROPE_INIT_FUNCTIONS[self.rope_type]
 
         inv_freq, self.attention_scaling = self.rope_init_fn(self.config, device)
+        # self.attention_scaling should be 1.1902380714238083 for phi4
         self.register_buffer("inv_freq", inv_freq, persistent=False)
         self.original_inv_freq = self.inv_freq
 
@@ -555,10 +570,12 @@ class Phi3RotaryEmbedding(nn.Module):
         global TENSOR_DUMP_COUNTER
         np.savez(
             f"/Users/sidhartb/Work/mlc-llm/dist/debug/debug-Phi-4-mini-instruct-hf/f{TENSOR_DUMP_COUNTER}_tensor_dump_phi3_rotary_embedding.npz",
-            arg0=x,
-            arg1=position_ids,
-            arg2=cos,
-            arg3=sin,
+            x=x,
+            position_ids=position_ids,
+            cos=cos,
+            sin=sin,
+            freqs=freqs,
+            emb=emb,
         )
         TENSOR_DUMP_COUNTER += 1
 
