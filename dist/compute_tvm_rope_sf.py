@@ -15,19 +15,19 @@ from typing import Any, Callable, Dict, Optional, Tuple
 # original_max_position_embeddings = 8192
 
 max_seq_len = 30
-head_dim = 128 # head_dim = hidden_size / num_attention_heads
+head_dim = 128  # head_dim = hidden_size / num_attention_heads
 partial_rotary_factor = 0.75
 rotary_dim = int(head_dim * partial_rotary_factor)
-theta = 10000.0 # from HF config.json
-original_max_position_embeddings = 4096 # from HF config.json
-max_position_embeddings = 131072 # from HF config.json
-dtype = "float32" # from HF config.json
+theta = 10000.0  # from HF config.json
+original_max_position_embeddings = 4096  # from HF config.json
+max_position_embeddings = 131072  # from HF config.json
+dtype = "float32"  # from HF config.json
 
-# from HF config.json its the "long_factors" field. 
+# from HF config.json its the "long_factors" field.
 # mlc phi3 impl passes this to the kv cache creation via the rope_scaling
 # dictionary it creates, and it eventually gets used in the
 # rope_freq_longrope function to scale the RoPE frequencies.
-rope_ext_factors = [
+long_ext_factors = [
     1,
     1.118320672,
     1.250641126,
@@ -77,6 +77,59 @@ rope_ext_factors = [
     44.16,
     47.77,
 ]
+
+short_ext_factors = [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+]
+
+rope_ext_factors = short_ext_factors
 
 
 def compute_inv_freq(ext_factors_buf):
