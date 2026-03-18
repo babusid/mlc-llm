@@ -102,16 +102,22 @@ set_target_properties(mlc_llm_static PROPERTIES OUTPUT_NAME mlc_llm)
 target_link_libraries(mlc_llm PUBLIC tvm_runtime)
 target_link_libraries(mlc_llm PRIVATE tokenizers_cpp)
 
-find_library(FLASH_ATTN_LIBRARY flash_attn
-             HINTS ${TVM_SOURCE_DIR}/*/3rdparty/libflash_attn/src)
-
-if(FLASH_ATTN_LIBRARY STREQUAL "FLASH_ATTN_LIBRARY-NOTFOUND")
-  message(
-    WARNING
-      "Cannot find libflash_attn. The model must not have been built with --use-flash-attn-mqa option."
-  )
+if(TARGET flash_attn)
+  # flash_attn was already built by TVM's CUTLASS.cmake via add_subdirectory;
+  # link against that target directly to avoid RPATH conflicts with a
+  # pre-existing libflash_attn.so in TVM_SOURCE_DIR's build tree.
+  target_link_libraries(mlc_llm PUBLIC -Wl,--no-as-needed flash_attn)
 else()
-  target_link_libraries(mlc_llm PUBLIC -Wl,--no-as-needed ${FLASH_ATTN_LIBRARY})
+  find_library(FLASH_ATTN_LIBRARY flash_attn
+               HINTS ${TVM_SOURCE_DIR}/*/3rdparty/libflash_attn/src)
+  if(FLASH_ATTN_LIBRARY STREQUAL "FLASH_ATTN_LIBRARY-NOTFOUND")
+    message(
+      WARNING
+        "Cannot find libflash_attn. The model must not have been built with --use-flash-attn-mqa option."
+    )
+  else()
+    target_link_libraries(mlc_llm PUBLIC -Wl,--no-as-needed ${FLASH_ATTN_LIBRARY})
+  endif()
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
