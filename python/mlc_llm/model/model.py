@@ -19,6 +19,7 @@ from .eagle import eagle_loader, eagle_model
 from .gemma import gemma_loader, gemma_model
 from .gemma2 import gemma2_loader, gemma2_model
 from .gemma3 import gemma3_loader, gemma3_model
+from .glm_4_7 import glm_4_7_loader, glm_4_7_model
 from .gpt2 import gpt2_loader, gpt2_model
 from .gpt_bigcode import gpt_bigcode_loader, gpt_bigcode_model
 from .gpt_j import gpt_j_loader, gpt_j_model
@@ -578,6 +579,18 @@ MODELS: Dict[str, Model] = {
         quantize=make_quantization_functions(
             chatglm3_model.ChatGLMForCausalLM,
             supports_ft_quant=False,
+        ),
+    ),
+    "glm_4_7": Model(
+        name="glm_4_7",
+        model=glm_4_7_model.GLM47FlashForCausalLM,
+        config=glm_4_7_model.GLM47FlashConfig,
+        source={
+            "huggingface-torch": glm_4_7_loader.huggingface,
+            "huggingface-safetensor": glm_4_7_loader.huggingface,
+        },
+        quantize=make_quantization_functions(
+            glm_4_7_model.GLM47FlashForCausalLM,
         ),
     ),
     "eagle": Model(
