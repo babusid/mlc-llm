@@ -41,6 +41,7 @@ Check out :ref:`introduction-to-mlc-llm` for the introduction and tutorial of a 
    deploy/ios.rst
    deploy/android.rst
    deploy/ide_integration.rst
+   deploy/open_webui_mlc.rst
    deploy/mlc_chat_config.rst
 
 .. toctree::
