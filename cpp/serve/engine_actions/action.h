@@ -95,6 +95,13 @@ class EngineAction : public ObjectRef {
       DraftTokenWorkspaceManager draft_token_workspace_manager, EngineConfig engine_config,
       std::vector<tvm::ffi::json::Object> model_configs,
       Optional<EventTraceRecorder> trace_recorder);
+
+  static EngineAction MedusaNewRequestPrefill(
+      Array<Model> models, LogitProcessor logit_processor, Sampler sampler,
+      std::vector<ModelWorkspace> model_workspaces,
+      DraftTokenWorkspaceManager draft_token_workspace_manager, EngineConfig engine_config,
+      std::vector<tvm::ffi::json::Object> model_configs,
+      Optional<EventTraceRecorder> trace_recorder);
   /*!
    * \brief Create the action that runs one-step decode for requests in the
    * `running_queue` of engine state. Preempt low-priority requests
@@ -191,6 +198,13 @@ class EngineAction : public ObjectRef {
                                        DraftTokenWorkspaceManager draft_token_workspace_manager,
                                        EngineConfig engine_config,
                                        Optional<EventTraceRecorder> trace_recorder);
+
+  static EngineAction MedusaBatchVerify(Array<Model> models, LogitProcessor logit_processor,
+                                        Sampler sampler,
+                                        std::vector<ModelWorkspace> model_workspaces,
+                                        DraftTokenWorkspaceManager draft_token_workspace_manager,
+                                        EngineConfig engine_config,
+                                        Optional<EventTraceRecorder> trace_recorder);
   /*!
    * \brief Create the action that executes the jump-forward decoding to predict the next tokens
    * according to the grammar constraint. Does nothing for the requests without grammar. The

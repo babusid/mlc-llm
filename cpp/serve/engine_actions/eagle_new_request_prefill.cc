@@ -115,10 +115,6 @@ class EagleNewRequestPrefillActionObj : public BatchPrefillBaseActionObj {
         }
         request_internal_ids.push_back(mstate->internal_id);
 
-        if (engine_config_->speculative_mode == SpeculativeMode::kMedusa && model_id > 0) {
-          // Embedding is only needed for the base model in Medusa.
-          continue;
-        }
         auto [input_data, input_length] =
             ChunkPrefillInputData(mstate, prefill_inputs[i].max_prefill_length);
         if (prefill_lengths[i] == -1) {
@@ -146,9 +142,7 @@ class EagleNewRequestPrefillActionObj : public BatchPrefillBaseActionObj {
 
       RECORD_EVENT(trace_recorder_, request_ids, "start prefill");
 
-      Array<Tensor> multi_step_logits{nullptr};
-
-      if (model_id == 0 || engine_config_->speculative_mode == SpeculativeMode::kEagle) {
+      {
         ObjectRef embedding_or_hidden_states{nullptr};
         if (model_id == 0) {
           embedding_or_hidden_states = embeddings;
@@ -190,11 +184,6 @@ class EagleNewRequestPrefillActionObj : public BatchPrefillBaseActionObj {
             hidden_states, logit_positions, &model_workspaces_[model_id].hidden_states);
         // logits_for_sample: (b * s, v)
         logits_for_sample = models_[sample_model_id]->GetLogits(hidden_states_for_sample);
-      } else if (engine_config_->speculative_mode == SpeculativeMode::kMedusa) {
-        // Note: spec_draft_length in engine config has to be match the model config in Medusa.
-        multi_step_logits = models_[model_id]->GetMultiStepLogits(hidden_states_for_sample);
-      } else {
-        LOG(FATAL) << "unreachable";
       }
 
       Array<String> child_request_ids;
@@ -288,7 +277,7 @@ class EagleNewRequestPrefillActionObj : public BatchPrefillBaseActionObj {
         generation_cfg.push_back(prefill_inputs[i].rsentry->request->generation_cfg);
         mstates_for_logitproc.push_back(prefill_inputs[i].rsentry->mstates[model_id]);
       }
-      if (model_id == 0 || engine_config_->speculative_mode == SpeculativeMode::kEagle) {
+      {
         const auto& [renormalized_probs, sample_results] = ApplyLogitProcessorAndSample(
             logit_processor_, sampler_, logits_for_sample, generation_cfg, request_ids,
             mstates_for_logitproc, rngs, sample_indices, child_generation_cfg, child_request_ids,
@@ -297,19 +286,17 @@ class EagleNewRequestPrefillActionObj : public BatchPrefillBaseActionObj {
           UpdateRequestStateEntriesWithSampleResults(rsentries_for_sample, rsentry_activated,
                                                      sample_results);
           // Add the sampled token as an input of the eagle models.
-          if (engine_config_->speculative_mode == SpeculativeMode::kEagle) {
-            for (int i = 0; i < static_cast<int>(rsentries_for_sample.size()); ++i) {
-              for (int mid = 1; mid < static_cast<int>(models_.size()); ++mid) {
-                TokenData token_data =
-                    Downcast<TokenData>(rsentries_for_sample[i]->mstates[mid]->inputs.back());
-                std::vector<int32_t> token_ids = {token_data->token_ids.begin(),
-                                                  token_data->token_ids.end()};
-                token_ids.push_back(sample_results[i].GetTokenId());
-                int ninputs =
-                    static_cast<int>(rsentries_for_sample[i]->mstates[mid]->inputs.size());
-                rsentries_for_sample[i]->mstates[mid]->inputs.Set(
-                    ninputs - 1, TokenData(Shape(token_ids.begin(), token_ids.end())));
-              }
+          for (int i = 0; i < static_cast<int>(rsentries_for_sample.size()); ++i) {
+            for (int mid = 1; mid < static_cast<int>(models_.size()); ++mid) {
+              TokenData token_data =
+                  Downcast<TokenData>(rsentries_for_sample[i]->mstates[mid]->inputs.back());
+              std::vector<int32_t> token_ids = {token_data->token_ids.begin(),
+                                                token_data->token_ids.end()};
+              token_ids.push_back(sample_results[i].GetTokenId());
+              int ninputs =
+                  static_cast<int>(rsentries_for_sample[i]->mstates[mid]->inputs.size());
+              rsentries_for_sample[i]->mstates[mid]->inputs.Set(
+                  ninputs - 1, TokenData(Shape(token_ids.begin(), token_ids.end())));
             }
           }
         } else {
@@ -317,18 +304,6 @@ class EagleNewRequestPrefillActionObj : public BatchPrefillBaseActionObj {
           UpdateRequestStatesWithDraftProposals(rsentries_for_sample, sample_results, model_id,
                                                 renormalized_probs, hidden_states_for_sample,
                                                 estate, child_sample_indices);
-        }
-      } else if (engine_config_->speculative_mode == SpeculativeMode::kMedusa) {
-        TVM_FFI_ICHECK_NE(estate->spec_draft_length, 0);
-        for (int draft_id = 0; draft_id < estate->spec_draft_length; ++draft_id) {
-          const auto& [renormalized_probs, sample_results] = ApplyLogitProcessorAndSample(
-              logit_processor_, sampler_, multi_step_logits[draft_id], generation_cfg, request_ids,
-              mstates_for_logitproc, rngs, sample_indices, child_generation_cfg, child_request_ids,
-              child_sample_indices);
-
-          UpdateRequestStatesWithDraftProposals(
-              rsentries_for_sample, sample_results, model_id, renormalized_probs,
-              /*hidden_states=*/ObjectRef{nullptr}, estate, child_sample_indices);
         }
       }
     }
@@ -357,8 +332,7 @@ class EagleNewRequestPrefillActionObj : public BatchPrefillBaseActionObj {
 
     models_[0]->ScatterDraftProbs(renormalized_probs, draft_token_slots_,
                                   &model_workspaces_[0].draft_probs_storage);
-    if (engine_config_->speculative_mode == SpeculativeMode::kEagle &&
-        estate->spec_draft_length > 1) {
+    if (estate->spec_draft_length > 1) {
       models_[0]->ScatterHiddenStates(hidden_states_for_sample, draft_token_slots_,
                                       &model_workspaces_[0].draft_hidden_states_storage);
     }

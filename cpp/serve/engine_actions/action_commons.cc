@@ -24,7 +24,7 @@ Array<EngineAction> CreateEngineActions(Array<Model> models, EngineConfig engine
   ModelMetadata model_metadata = models[0]->GetMetadata();
   if (engine_config->speculative_mode != SpeculativeMode::kDisable) {
     // Speculative decoding is only possible for more than one model.
-    TVM_FFI_ICHECK_GT(models.size(), 1U);
+    TVM_FFI_ICHECK_GT(models.size(), 1U) << "Speculative decoding is only possible for more than one model.";
     if (engine_config->speculative_mode == SpeculativeMode::kEagle) {
       TVM_FFI_ICHECK_GT(engine_config->spec_draft_length, 0)
           << "The automatic spec decoding does not support Eagle mode as of now.";
@@ -44,18 +44,19 @@ Array<EngineAction> CreateEngineActions(Array<Model> models, EngineConfig engine
                                                 trace_recorder)};
     } else if (engine_config->speculative_mode == SpeculativeMode::kMedusa) {
       TVM_FFI_ICHECK_GT(engine_config->spec_draft_length, 0)
-          << "The automatic spec decoding does not support Eagle mode as of now.";
-      actions = {EngineAction::EagleNewRequestPrefill(models,                         //
-                                                      logit_processor,                //
-                                                      sampler,                        //
-                                                      model_workspaces,               //
-                                                      draft_token_workspace_manager,  //
-                                                      engine_config,                  //
-                                                      model_configs,                  //
-                                                      trace_recorder),
-                 EngineAction::EagleBatchVerify(models, logit_processor, sampler, model_workspaces,
-                                                draft_token_workspace_manager, engine_config,
-                                                trace_recorder)};
+          << "The automatic spec decoding does not support Medusa mode as of now.";
+      actions = {EngineAction::MedusaNewRequestPrefill(models,                        //
+                                                       logit_processor,               //
+                                                       sampler,                       //
+                                                       model_workspaces,              //
+                                                       draft_token_workspace_manager, //
+                                                       engine_config,                 //
+                                                       model_configs,                 //
+                                                       trace_recorder),
+                 EngineAction::MedusaBatchVerify(models, logit_processor, sampler,
+                                                 model_workspaces,
+                                                 draft_token_workspace_manager,
+                                                 engine_config, trace_recorder)};
     } else if (engine_config->spec_draft_length > 0) {
       // The "small draft" mode speculative decoding.
       // If "engine_config->spec_draft_length" > 0, it means the draft length is
